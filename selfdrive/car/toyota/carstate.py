@@ -72,7 +72,7 @@ def get_can_parser(CP):
   if CP.carFingerprint in NO_DSU_CAR:
     signals += [("STEER_ANGLE", "STEER_TORQUE_SENSOR", 0)]
 
-  if CP.carFingerprint == CAR.PRIUS:
+  if True:
     signals += [("STATE", "AUTOPARK_STATUS", 0)]
     signals += [("ZORRO_STEER", "SECONDARY_STEER_ANGLE", 0)]
 
@@ -155,7 +155,7 @@ class CarState():
 
     if self.CP.carFingerprint in TSS2_CAR:
       self.angle_steers = cp.vl["STEER_TORQUE_SENSOR"]['STEER_ANGLE']
-    elif CP.carFingerprint == CAR.PRIUS:
+    elif True:
       # cp.vl["STEER_TORQUE_SENSOR"]['STEER_ANGLE'] is zeroed to where the steering angle is at start.
       # need to apply an offset as soon as the steering angle measurements are both received
       self.angle_steers = cp.vl["SECONDARY_STEER_ANGLE"]['ZORRO_STEER'] - self.angle_offset
