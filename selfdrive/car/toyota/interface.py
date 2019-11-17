@@ -18,7 +18,7 @@ class CarInterface(CarInterfaceBase):
     self.VM = VehicleModel(CP)
 
     self.frame = 0
-    self.gas_pressed_prev = False
+    self.gas_pressed_prev = Falsetimec
     self.brake_pressed_prev = False
     self.cruise_enabled_prev = False
 
@@ -68,7 +68,7 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.init('indi')
       ret.lateralTuning.indi.innerLoopGain = 4.0
       ret.lateralTuning.indi.outerLoopGain = 3.0
-      ret.lateralTuning.indi.timeConstant = 0.3
+      ret.lateralTuning.indi.timeConstant = 0.1
       ret.lateralTuning.indi.actuatorEffectiveness = 1.0
 
       # TODO: Determine if this is better than INDI
@@ -224,7 +224,7 @@ class CarInterface(CarInterfaceBase):
       ret.lateralTuning.pid.kpV, ret.lateralTuning.pid.kiV = [[0.3], [0.05]]
       ret.lateralTuning.pid.kf = 0.00007
 
-    ret.steerRateCost = 1.
+    ret.steerRateCost = 0.5
     ret.centerToFront = ret.wheelbase * 0.44
 
     # TODO: get actual value, for now starting with reasonable value for
