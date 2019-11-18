@@ -18,7 +18,7 @@ class CarInterface(CarInterfaceBase):
     self.VM = VehicleModel(CP)
 
     self.frame = 0
-    self.gas_pressed_prev = Falsetimec
+    self.gas_pressed_prev = False
     self.brake_pressed_prev = False
     self.cruise_enabled_prev = False
 
