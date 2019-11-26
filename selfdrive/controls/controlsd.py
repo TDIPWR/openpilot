@@ -504,7 +504,14 @@ def controlsd_thread(sm=None, pm=None, can_sock=None):
   # controlsd is driven by can recv, expected at 100Hz
   rk = Ratekeeper(100, print_delay_threshold=None)
 
+<<<<<<< HEAD
   internet_needed = params.get("Offroad_ConnectivityNeeded", encoding='utf8') is not None
+=======
+  # FIXME: offroad alerts should not be created with negative severity
+  connectivity_alert = params.get("Offroad_ConnectivityNeeded", encoding='utf8')
+  connectivity_alert = None
+  internet_needed = connectivity_alert is not None and json.loads(connectivity_alert)["severity"] >= 0
+>>>>>>> parent of 9e5eab58... Revert "Connectivity_alert = None"
 
   prof = Profiler(False)  # off by default
 
