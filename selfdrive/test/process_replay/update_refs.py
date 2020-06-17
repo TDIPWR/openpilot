@@ -20,7 +20,7 @@ if __name__ == "__main__":
   with open(ref_commit_fn, "w") as f:
     f.write(ref_commit)
 
-  for car_brand, segment in segments:
+  for segment in segments:
     rlog_fn = get_segment(segment)
 
     if rlog_fn is None:
@@ -37,5 +37,6 @@ if __name__ == "__main__":
       if not no_upload:
         upload_file(log_fn, os.path.basename(log_fn))
         os.remove(log_fn)
+    os.remove(rlog_fn)
 
   print("done")

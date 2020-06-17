@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# type: ignore
 import subprocess
 import os
 import sys

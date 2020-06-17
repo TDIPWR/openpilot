@@ -19,11 +19,10 @@ def process(in_fn, out_fn):
 
   can_dbc = dbc(in_fn)
 
-  # process counter and checksums first
-  msgs = [(address, msg_name, msg_size, sorted(msg_sigs, key=lambda s: s.name not in ("COUNTER", "CHECKSUM")))
+  msgs = [(address, msg_name, msg_size, sorted(msg_sigs, key=lambda s: s.name not in ("COUNTER", "CHECKSUM"))) # process counter and checksums first
           for address, ((msg_name, msg_size), msg_sigs) in sorted(can_dbc.msgs.items()) if msg_sigs]
 
-  def_vals = {a: sorted(set(b)) for a, b in can_dbc.def_vals.items()}  # remove duplicates
+  def_vals = {a: sorted(set(b)) for a, b in can_dbc.def_vals.items()} # remove duplicates
   def_vals = sorted(def_vals.items())
 
   if can_dbc.name.startswith(("honda_", "acura_")):
@@ -47,20 +46,6 @@ def process(in_fn, out_fn):
     checksum_start_bit = 0
     counter_start_bit = 0
     little_endian = True
-  elif can_dbc.name.startswith(("subaru_global_")):
-    checksum_type = "subaru"
-    checksum_size = 8
-    counter_size = None
-    checksum_start_bit = 0
-    counter_start_bit = None
-    little_endian = True
-  elif can_dbc.name.startswith(("chrysler_")):
-    checksum_type = "chrysler"
-    checksum_size = 8
-    counter_size = None
-    checksum_start_bit = 7
-    counter_start_bit = None
-    little_endian = False
   else:
     checksum_type = None
     checksum_size = None
@@ -124,3 +109,4 @@ def main():
 
 if __name__ == '__main__':
   main()
+

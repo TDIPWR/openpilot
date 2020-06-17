@@ -27,7 +27,7 @@ def main():
       proc.join()
       cloudlog.event("athenad exited", exitcode=proc.exitcode)
       time.sleep(5)
-  except Exception:
+  except:
     cloudlog.exception("manage_athenad.exception")
   finally:
     params.delete(ATHENA_MGR_PID_PARAM)

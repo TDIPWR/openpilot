@@ -1,12 +1,11 @@
 import os
 from common.basedir import BASEDIR
 
-
-def get_attr_from_cars(attr, result=dict, combine_brands=True):
+def get_attr_from_cars(attr):
   # read all the folders in selfdrive/car and return a dict where:
   # - keys are all the car models
   # - values are attr values from all car folders
-  result = result()
+  result = {}
 
   for car_folder in [x[0] for x in os.walk(BASEDIR + '/selfdrive/car')]:
     try:
@@ -17,16 +16,8 @@ def get_attr_from_cars(attr, result=dict, combine_brands=True):
       else:
         continue
 
-      if isinstance(attr_values, dict):
-        for f, v in attr_values.items():
-          if combine_brands:
-            result[f] = v
-          else:
-            if car_name not in result:
-              result[car_name] = {}
-            result[car_name][f] = v
-      elif isinstance(attr_values, list):
-        result += attr_values
+      for f, v in attr_values.items():
+        result[f] = v
 
     except (ImportError, IOError):
       pass
@@ -34,9 +25,20 @@ def get_attr_from_cars(attr, result=dict, combine_brands=True):
   return result
 
 
-FW_VERSIONS = get_attr_from_cars('FW_VERSIONS')
-_FINGERPRINTS = get_attr_from_cars('FINGERPRINTS')
-IGNORED_FINGERPRINTS = get_attr_from_cars('IGNORED_FINGERPRINTS', list)
+def get_fw_versions_list():
+  return get_attr_from_cars('FW_VERSIONS')
+
+
+def get_fingerprint_list():
+  # read all the folders in selfdrive/car and return a dict where:
+  # - keys are all the car models for which we have a fingerprint
+  # - values are lists dicts of messages that constitute the unique
+  #   CAN fingerprint of each car model and all its variants
+  return get_attr_from_cars('FINGERPRINTS')
+
+
+FW_VERSIONS = get_fw_versions_list()
+_FINGERPRINTS = get_fingerprint_list()
 
 _DEBUG_ADDRESS = {1880: 8}   # reserved for debug purposes
 
@@ -59,9 +61,6 @@ def eliminate_incompatible_cars(msg, candidate_cars):
   compatible_cars = []
 
   for car_name in candidate_cars:
-    if car_name in IGNORED_FINGERPRINTS:
-      continue
-
     car_fingerprints = _FINGERPRINTS[car_name]
 
     for fingerprint in car_fingerprints:

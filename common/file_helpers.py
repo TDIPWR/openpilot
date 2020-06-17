@@ -44,8 +44,7 @@ class AutoMoveTempdir():
   def close(self):
     os.rename(self._path, self._target_path)
 
-  def __enter__(self):
-    return self
+  def __enter__(self): return self
 
   def __exit__(self, type, value, traceback):
     if type is None:
@@ -64,8 +63,7 @@ class NamedTemporaryDir():
   def close(self):
     shutil.rmtree(self._path)
 
-  def __enter__(self):
-    return self
+  def __enter__(self): return self
 
   def __exit__(self, type, value, traceback):
     self.close()

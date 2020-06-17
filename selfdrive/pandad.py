@@ -72,8 +72,7 @@ def update_panda():
     cloudlog.info("Done flashing")
 
   if panda.bootstub:
-    bootstub_version = panda.get_version()
-    cloudlog.info(f"Flashed firmware not booting, flashing development bootloader. Bootstub version: {bootstub_version}")
+    cloudlog.info("Flashed firmware not booting, flashing development bootloader")
     panda.recover()
     cloudlog.info("Done flashing bootloader")
 
@@ -87,7 +86,7 @@ def update_panda():
     raise AssertionError
 
 
-def main():
+def main(gctx=None):
   update_panda()
 
   os.chdir("boardd")

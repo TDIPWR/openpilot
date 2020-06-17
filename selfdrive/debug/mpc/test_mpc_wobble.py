@@ -1,5 +1,4 @@
 #! /usr/bin/env python
-# type: ignore
 import matplotlib.pyplot as plt
 from selfdrive.controls.lib.lateral_mpc import libmpc_py
 from selfdrive.controls.lib.drive_helpers import MPC_COST_LAT

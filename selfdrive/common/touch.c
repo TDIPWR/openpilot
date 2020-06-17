@@ -10,13 +10,6 @@
 
 #include "touch.h"
 
-/* this macro is used to tell if "bit" is set in "array"
- * it selects a byte from the array, and does a boolean AND
- * operation with a byte that only has the relevant bit set.
- * eg. to check for the 12th bit, we do (array[1] & 1<<4)
- */
-#define test_bit(bit, array)    (array[bit/8] & (1<<(bit%8)))
-
 static int find_dev() {
   int err;
 
@@ -35,7 +28,10 @@ static int find_dev() {
     err = ioctl(fd, EVIOCGBIT(EV_ABS, sizeof(ev_bits)), ev_bits);
     assert(err >= 0);
 
-    if (test_bit(ABS_MT_POSITION_X, ev_bits) && test_bit(ABS_MT_POSITION_Y, ev_bits)) {
+    const int x_key = ABS_MT_POSITION_X / 8;
+    const int y_key = ABS_MT_POSITION_Y / 8;
+    if ((ev_bits[x_key] & (ABS_MT_POSITION_X - x_key)) &&
+        (ev_bits[y_key] & (ABS_MT_POSITION_Y - y_key))) {
       ret = fd;
       break;
     }

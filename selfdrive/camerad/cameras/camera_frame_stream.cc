@@ -1,11 +1,15 @@
 #include "camera_frame_stream.h"
 
+#include <string>
 #include <unistd.h>
+#include <vector>
 #include <cassert>
 #include <string.h>
 #include <signal.h>
 
 #include <libyuv.h>
+#include <capnp/serialize.h>
+#include "cereal/gen/cpp/log.capnp.h"
 #include "messaging.hpp"
 
 #include "common/util.h"
@@ -49,15 +53,22 @@ void camera_init(CameraState *s, int camera_id, unsigned int fps) {
 
 void run_frame_stream(DualCameraState *s) {
   int err;
-  SubMaster sm({"frame"});
+  Context * context = Context::create();
+  SubSocket * recorder_sock = SubSocket::create(context, "frame");
+  assert(recorder_sock != NULL);
 
   CameraState *const rear_camera = &s->rear;
   auto *tb = &rear_camera->camera_tb;
 
   while (!do_exit) {
-    if (sm.update(1000) == 0) continue;
+    Message * msg = recorder_sock->receive();
 
-    auto frame = sm["frame"].getFrame();
+    auto amsg = kj::heapArray<capnp::word>((msg->getSize() / sizeof(capnp::word)) + 1);
+    memcpy(amsg.begin(), msg->getData(), msg->getSize());
+
+    capnp::FlatArrayMessageReader cmsg(amsg);
+    cereal::Event::Reader event = cmsg.getRoot<cereal::Event>();
+    auto frame = event.getFrame();
 
     const int buf_idx = tbuffer_select(tb);
     rear_camera->camera_bufs_metadata[buf_idx] = {
@@ -83,7 +94,11 @@ void run_frame_stream(DualCameraState *s) {
     clWaitForEvents(1, &map_event);
     clReleaseEvent(map_event);
     tbuffer_dispatch(tb, buf_idx);
+    delete msg;
+
   }
+  delete recorder_sock;
+  delete context;
 }
 
 }  // namespace
@@ -100,7 +115,7 @@ CameraInfo cameras_supported[CAMERA_ID_MAX] = {
     .frame_width = 1632,
     .frame_height = 1224,
     .frame_stride = 2040, // seems right
-    .bayer = true,
+    .bayer = false,
     .bayer_flip = 3,
     .hdr = false
   },

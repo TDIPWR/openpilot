@@ -1,6 +1,7 @@
 from cereal import car, log
 from common.realtime import DT_CTRL
 from selfdrive.swaglog import cloudlog
+from selfdrive.controls.lib.alerts import ALERTS
 import copy
 
 
@@ -13,21 +14,21 @@ class AlertManager():
 
   def __init__(self):
     self.activealerts = []
+    self.alerts = {alert.alert_type: alert for alert in ALERTS}
 
-  def alert_present(self):
+  def alertPresent(self):
     return len(self.activealerts) > 0
 
-  def add_many(self, frame, alerts, enabled=True):
-    for a in alerts:
-      self.add(frame, a, enabled=enabled)
-
-  def add(self, frame, alert, enabled=True):
-    added_alert = copy.copy(alert)
+  def add(self, frame, alert_type, enabled=True, extra_text_1='', extra_text_2=''):
+    alert_type = str(alert_type)
+    added_alert = copy.copy(self.alerts[alert_type])
+    added_alert.alert_text_1 += extra_text_1
+    added_alert.alert_text_2 += extra_text_2
     added_alert.start_time = frame * DT_CTRL
 
     # if new alert is higher priority, log it
-    if not self.alert_present() or added_alert.alert_priority > self.activealerts[0].alert_priority:
-      cloudlog.event('alert_add', alert_type=added_alert.alert_type, enabled=enabled)
+    if not self.alertPresent() or added_alert.alert_priority > self.activealerts[0].alert_priority:
+          cloudlog.event('alert_add', alert_type=alert_type, enabled=enabled)
 
     self.activealerts.append(added_alert)
 
@@ -41,7 +42,7 @@ class AlertManager():
     self.activealerts = [a for a in self.activealerts if a.start_time +
                          max(a.duration_sound, a.duration_hud_alert, a.duration_text) > cur_time]
 
-    current_alert = self.activealerts[0] if self.alert_present() else None
+    current_alert = self.activealerts[0] if self.alertPresent() else None
 
     # start with assuming no alerts
     self.alert_type = ""

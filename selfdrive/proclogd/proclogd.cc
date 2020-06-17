@@ -5,6 +5,9 @@
 
 #include <unistd.h>
 #include <dirent.h>
+
+#include <vector>
+#include <string>
 #include <memory>
 #include <utility>
 #include <sstream>
@@ -14,6 +17,8 @@
 #include <unordered_map>
 
 #include "messaging.hpp"
+#include <capnp/serialize.h>
+#include "cereal/gen/cpp/log.capnp.h"
 
 #include "common/timing.h"
 #include "common/utilpp.h"
@@ -30,7 +35,10 @@ struct ProcCache {
 
 int main() {
   int err;
-  PubMaster publisher({"procLog"});
+
+  Context * c = Context::create();
+  PubSocket * publisher = PubSocket::create(c, "procLog");
+  assert(publisher != NULL);
 
   double jiffy = sysconf(_SC_CLK_TCK);
   size_t page_size = sysconf(_SC_PAGE_SIZE);
@@ -225,10 +233,15 @@ int main() {
       }
     }
 
-    publisher.send("procLog", msg);
+    auto words = capnp::messageToFlatArray(msg);
+    auto bytes = words.asBytes();
+    publisher->send((char*)bytes.begin(), bytes.size());
 
     usleep(2000000); // 2 secs
   }
+
+  delete c;
+  delete publisher;
 
   return 0;
 }

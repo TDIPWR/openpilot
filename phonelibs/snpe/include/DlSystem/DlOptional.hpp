@@ -35,10 +35,10 @@ template <typename T>
 class ZDL_EXPORT Optional final {
 public:
    enum class LIFECYCLE {
-      NONE = 0,
-      REFERENCE_OWNED = 1,
-      POINTER_OWNED = 2,
-      POINTER_NOT_OWNED = 3
+      NONE,
+      REFERENCE_OWNED,
+      POINTER_OWNED,
+      POINTER_NOT_OWNED
    };
 
    struct ReferenceCount {

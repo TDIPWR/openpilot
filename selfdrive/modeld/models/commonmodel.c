@@ -1,6 +1,7 @@
 #include "commonmodel.h"
 
 #include <czmq.h>
+#include "cereal/gen/c/log.capnp.h"
 #include "common/mat.h"
 #include "common/timing.h"
 

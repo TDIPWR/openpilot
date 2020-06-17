@@ -133,3 +133,5 @@ on of this parser
       self.ionoAlpha = []
       self.ionoBeta = []
       self.ionoCoeffsValid = False
+
+

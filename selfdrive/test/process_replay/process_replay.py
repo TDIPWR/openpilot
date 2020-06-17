@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-import capnp
 import os
 import sys
 import threading
 import importlib
 
 if "CI" in os.environ:
-  def tqdm(x):
-    return x
+  tqdm = lambda x: x
 else:
-  from tqdm import tqdm   # type: ignore
+  from tqdm import tqdm
 
 from cereal import car, log
 from selfdrive.car.car_helpers import get_car
@@ -63,7 +61,8 @@ class FakeSocket:
 class DumbSocket:
   def __init__(self, s=None):
     if s is not None:
-      dat = messaging.new_message(s)
+      dat = messaging.new_message()
+      dat.init(s)
       self.data = dat.to_bytes()
 
   def receive(self, non_blocking=False):
@@ -94,7 +93,6 @@ class FakeSubMaster(messaging.SubMaster):
     wait_for_event(self.update_ready)
     self.update_ready.clear()
 
-
   def update_msgs(self, cur_time, msgs):
     wait_for_event(self.update_called)
     self.update_called.clear()
@@ -110,10 +108,11 @@ class FakePubMaster(messaging.PubMaster):
     self.sock = {}
     self.last_updated = None
     for s in services:
+      data = messaging.new_message()
       try:
-        data = messaging.new_message(s)
-      except capnp.lib.capnp.KjException:
-        data = messaging.new_message(s, 0)
+        data.init(s)
+      except:
+        data.init(s, 0)
       self.data[s] = data.as_reader()
       self.sock[s] = DumbSocket()
     self.send_called = threading.Event()
@@ -189,14 +188,8 @@ def radar_rcv_callback(msg, CP, cfg, fsm):
 def calibration_rcv_callback(msg, CP, cfg, fsm):
   # calibrationd publishes 1 calibrationData every 5 cameraOdometry packets.
   # should_recv always true to increment frame
-  if msg.which() == 'carState':
-    if ((fsm.frame + 1) % 25) == 0:
-      recv_socks = ["liveCalibration"]
-    else:
-      recv_socks = []
-    return recv_socks, True
-  else:
-    return [], False
+  recv_socks = ["liveCalibration"] if (fsm.frame + 1) % 5 == 0 else []
+  return recv_socks, True
 
 
 CONFIGS = [
@@ -204,10 +197,10 @@ CONFIGS = [
     proc_name="controlsd",
     pub_sub={
       "can": ["controlsState", "carState", "carControl", "sendcan", "carEvents", "carParams"],
-      "thermal": [], "health": [], "liveCalibration": [], "dMonitoringState": [], "plan": [], "pathPlan": [], "gpsLocation": [], "liveLocationKalman": [],
+      "thermal": [], "health": [], "liveCalibration": [], "dMonitoringState": [], "plan": [], "pathPlan": [], "gpsLocation": [],
       "model": [],
     },
-    ignore=["logMonoTime", "valid", "controlsState.startMonoTime", "controlsState.cumLagMs"],
+    ignore=[("logMonoTime", 0), ("valid", True), ("controlsState.startMonoTime", 0), ("controlsState.cumLagMs", 0)],
     init_callback=fingerprint,
     should_recv_callback=None,
   ),
@@ -217,7 +210,7 @@ CONFIGS = [
       "can": ["radarState", "liveTracks"],
       "liveParameters":  [], "controlsState":  [], "model":  [],
     },
-    ignore=["logMonoTime", "valid", "radarState.cumLagMs"],
+    ignore=[("logMonoTime", 0), ("valid", True), ("radarState.cumLagMs", 0)],
     init_callback=get_car_params,
     should_recv_callback=radar_rcv_callback,
   ),
@@ -227,17 +220,16 @@ CONFIGS = [
       "model": ["pathPlan"], "radarState": ["plan"],
       "carState": [], "controlsState": [], "liveParameters": [],
     },
-    ignore=["logMonoTime", "valid", "plan.processingDelay"],
+    ignore=[("logMonoTime", 0), ("valid", True), ("plan.processingDelay", 0)],
     init_callback=get_car_params,
     should_recv_callback=None,
   ),
   ProcessConfig(
     proc_name="calibrationd",
     pub_sub={
-      "carState": ["liveCalibration"],
-      "cameraOdometry": []
+      "cameraOdometry": ["liveCalibration"]
     },
-    ignore=["logMonoTime", "valid"],
+    ignore=[("logMonoTime", 0), ("valid", True)],
     init_callback=get_car_params,
     should_recv_callback=calibration_rcv_callback,
   ),
@@ -247,7 +239,7 @@ CONFIGS = [
       "driverState": ["dMonitoringState"],
       "liveCalibration": [], "carState": [], "model": [], "gpsLocation": [],
     },
-    ignore=["logMonoTime", "valid"],
+    ignore=[("logMonoTime", 0), ("valid", True)],
     init_callback=get_car_params,
     should_recv_callback=None,
   ),

@@ -143,11 +143,7 @@ int MSGQPubSocket::connect(Context *context, std::string endpoint){
   assert(context);
 
   q = new msgq_queue_t;
-  int r = msgq_new_queue(q, endpoint.c_str(), DEFAULT_SEGMENT_SIZE);
-  if (r != 0){
-    return r;
-  }
-
+  msgq_new_queue(q, endpoint.c_str(), DEFAULT_SEGMENT_SIZE);
   msgq_init_publisher(q);
 
   return 0;
