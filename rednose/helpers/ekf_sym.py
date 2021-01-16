@@ -18,14 +18,15 @@ def solve(a, b):
 
 
 def null(H, eps=1e-12):
-  u, s, vh = np.linalg.svd(H)
+  _, s, vh = np.linalg.svd(H)
   padding = max(0, np.shape(H)[1] - np.shape(s)[0])
   null_mask = np.concatenate(((s <= eps), np.ones((padding,), dtype=bool)), axis=0)
   null_space = np.compress(null_mask, vh, axis=0)
   return np.transpose(null_space)
 
 
-def gen_code(folder, name, f_sym, dt_sym, x_sym, obs_eqs, dim_x, dim_err, eskf_params=None, msckf_params=None, maha_test_kinds=[], global_vars=None):
+def gen_code(folder, name, f_sym, dt_sym, x_sym, obs_eqs, dim_x, dim_err, eskf_params=None, msckf_params=None,  # pylint: disable=dangerous-default-value
+             maha_test_kinds=[], global_vars=None):
   # optional state transition matrix, H modifier
   # and err_function if an error-state kalman filter (ESKF)
   # is desired. Best described in "Quaternion kinematics
@@ -155,8 +156,8 @@ def gen_code(folder, name, f_sym, dt_sym, x_sym, obs_eqs, dim_x, dim_err, eskf_p
 
 
 class EKF_sym():
-  def __init__(self, folder, name, Q, x_initial, P_initial, dim_main, dim_main_err,
-               N=0, dim_augment=0, dim_augment_err=0, maha_test_kinds=[], global_vars=None):
+  def __init__(self, folder, name, Q, x_initial, P_initial, dim_main, dim_main_err,  # pylint: disable=dangerous-default-value
+               N=0, dim_augment=0, dim_augment_err=0, maha_test_kinds=[], global_vars=None, max_rewind_age=1.0):
     """Generates process function and all observation functions for the kalman filter."""
     self.msckf = N > 0
     self.N = N
@@ -183,6 +184,7 @@ class EKF_sym():
     self.Q = Q
 
     # rewind stuff
+    self.max_rewind_age = max_rewind_age
     self.rewind_t = []
     self.rewind_states = []
     self.rewind_obscache = []
@@ -198,7 +200,7 @@ class EKF_sym():
 
     # wrap all the sympy functions
     def wrap_1lists(name):
-      func = eval("lib.%s" % name, {"lib": lib})
+      func = eval("lib.%s" % name, {"lib": lib})  # pylint: disable=eval-used
 
       def ret(lst1, out):
         func(ffi.cast("double *", lst1.ctypes.data),
@@ -206,7 +208,7 @@ class EKF_sym():
       return ret
 
     def wrap_2lists(name):
-      func = eval("lib.%s" % name, {"lib": lib})
+      func = eval("lib.%s" % name, {"lib": lib})  # pylint: disable=eval-used
 
       def ret(lst1, lst2, out):
         func(ffi.cast("double *", lst1.ctypes.data),
@@ -215,7 +217,7 @@ class EKF_sym():
       return ret
 
     def wrap_1list_1float(name):
-      func = eval("lib.%s" % name, {"lib": lib})
+      func = eval("lib.%s" % name, {"lib": lib})  # pylint: disable=eval-used
 
       def ret(lst1, fl, out):
         func(ffi.cast("double *", lst1.ctypes.data),
@@ -252,7 +254,7 @@ class EKF_sym():
 
     # wrap the C++ update function
     def fun_wrapper(f, kind):
-      f = eval("lib.%s" % f, {"lib": lib})
+      f = eval("lib.%s" % f, {"lib": lib})  # pylint: disable=eval-used
 
       def _update_inner_blas(x, P, z, R, extra_args):
         f(ffi.cast("double *", x.ctypes.data),
@@ -271,7 +273,7 @@ class EKF_sym():
     for kind in kinds:
       self._updates[kind] = fun_wrapper("update_%d" % kind, kind)
 
-    def _update_blas(x, P, kind, z, R, extra_args=[]):
+    def _update_blas(x, P, kind, z, R, extra_args=[]):  # pylint: disable=dangerous-default-value
         return self._updates[kind](x, P, z, R, extra_args)
 
     # assign the functions
@@ -373,12 +375,12 @@ class EKF_sym():
     self.x, self.P = self._predict(self.x, self.P, dt)
     self.filter_time = t
 
-  def predict_and_update_batch(self, t, kind, z, R, extra_args=[[]], augment=False):
+  def predict_and_update_batch(self, t, kind, z, R, extra_args=[[]], augment=False):  # pylint: disable=dangerous-default-value
     # TODO handle rewinding at this level"
 
     # rewind
     if self.filter_time is not None and t < self.filter_time:
-      if len(self.rewind_t) == 0 or t < self.rewind_t[0] or t < self.rewind_t[-1] - 1.0:
+      if len(self.rewind_t) == 0 or t < self.rewind_t[0] or t < self.rewind_t[-1] - self.max_rewind_age:
         print("observation too old at %.3f with filter at %.3f, ignoring" % (t, self.filter_time))
         return None
       rewound = self.rewind(t)
@@ -471,7 +473,7 @@ class EKF_sym():
     P += dt * self.Q
     return x_new, P
 
-  def _update_python(self, x, P, kind, z, R, extra_args=[]):
+  def _update_python(self, x, P, kind, z, R, extra_args=[]):  # pylint: disable=dangerous-default-value
     # init vars
     z = z.reshape((-1, 1))
     h = np.zeros(z.shape, dtype=np.float64)
@@ -536,7 +538,7 @@ class EKF_sym():
     self.err_function(x, delta_x, x_new)
     return x_new, P, y.flatten()
 
-  def maha_test(self, x, P, kind, z, R, extra_args=[], maha_thresh=0.95):
+  def maha_test(self, x, P, kind, z, R, extra_args=[], maha_thresh=0.95):  # pylint: disable=dangerous-default-value
     # init vars
     z = z.reshape((-1, 1))
     h = np.zeros(z.shape, dtype=np.float64)

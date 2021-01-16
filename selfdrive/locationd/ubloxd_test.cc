@@ -7,7 +7,6 @@
 #include <sys/time.h>
 #include <sys/cdefs.h>
 #include <sys/types.h>
-#include <sys/time.h>
 #include <assert.h>
 #include <math.h>
 #include <ctime>
@@ -26,13 +25,13 @@
 using namespace ublox;
 extern volatile sig_atomic_t do_exit;
 
-void write_file(std::string fpath, uint8_t *to_write, int len) {
+void write_file(std::string fpath, uint8_t *to_write, int length) {
   FILE* f = fopen(fpath.c_str(), "wb");
   if (!f) {
     std::cout << "Open " << fpath << " failed" << std::endl;
     return;
   }
-  fwrite(to_write, len, 1, f);
+  fwrite(to_write, length, 1, f);
   fclose(f);
 }
 
@@ -48,15 +47,11 @@ Message * poll_ubloxraw_msg(Poller * poller) {
   size_t consuming  = min(len - consumed, 128);
   if(consumed < len) {
     // create message
-    capnp::MallocMessageBuilder msg_builder;
-    cereal::Event::Builder event = msg_builder.initRoot<cereal::Event>();
-    event.setLogMonoTime(nanos_since_boot());
-
-    auto ublox_raw = event.initUbloxRaw(consuming);
+    MessageBuilder msg_builder;
+    auto ublox_raw = msg_builder.initEvent().initUbloxRaw(consuming);
     memcpy(ublox_raw.begin(), (void *)(data + consumed), consuming);
 
-    auto words = capnp::messageToFlatArray(msg_builder);
-    auto bytes = words.asBytes();
+    auto bytes = msg_builder.toBytes();
 
     Message * msg = new ZMQMessage();
     msg->init((char*)bytes.begin(), bytes.size());
