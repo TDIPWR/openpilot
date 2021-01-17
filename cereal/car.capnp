@@ -73,7 +73,6 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     preLaneChangeLeft @57;
     preLaneChangeRight @58;
     laneChange @59;
-    invalidGiraffeToyota @60;
     internetConnectivityNeeded @61;
     communityFeatureDisallowed @62;
     lowMemory @63;
@@ -94,13 +93,15 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     startupMaster @78;
     fcw @79;
     steerSaturated @80;
-    whitePandaUnsupported @81;
     belowEngageSpeed @84;
     noGps @85;
     wrongCruiseMode @87;
     modeldLagging @89;
     deviceFalling @90;
     fanMalfunction @91;
+    cameraMalfunction @92;
+
+    startupOneplus @82;
 
     gasUnavailableDEPRECATED @3;
     dataNeededDEPRECATED @16;
@@ -111,10 +112,12 @@ struct CarEvent @0x9b1657f34caf3ad3 {
     driverMonitorOffDEPRECATED @42;
     calibrationProgressDEPRECATED @47;
     invalidGiraffeHondaDEPRECATED @49;
-    canErrorPersistentDEPRECATED @83;
-    startupWhitePandaDEPRECATED @82;
+    invalidGiraffeToyotaDEPRECATED @60;
+    whitePandaUnsupportedDEPRECATED @81;
+    commIssueWarningDEPRECATED @83;
     focusRecoverActiveDEPRECATED @86;
     neosUpdateRequiredDEPRECATED @88;
+    modelLagWarningDEPRECATED @93;
   }
 }
 
@@ -396,6 +399,9 @@ struct CarParams {
   steerRateCost @33 :Float32; # Lateral MPC cost on steering rate
   steerControlType @34 :SteerControlType;
   radarOffCan @35 :Bool; # True when radar objects aren't visible on CAN
+  minSpeedCan @51 :Float32; # Minimum vehicle speed from CAN (below this value drops to 0)
+  stoppingBrakeRate @52 :Float32; # brake_travel/s while trying to stop
+  startingBrakeRate @53 :Float32; # brake_travel/s while releasing on restart
 
   steerActuatorDelay @36 :Float32; # Steering wheel actuator delay in seconds
   openpilotLongitudinalControl @37 :Bool; # is openpilot doing the longitudinal control?

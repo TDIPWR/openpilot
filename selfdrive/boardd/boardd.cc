@@ -56,7 +56,9 @@ struct tm get_time(){
 }
 
 bool time_valid(struct tm sys_time){
-  return 1900 + sys_time.tm_year >= 2019;
+  int year = 1900 + sys_time.tm_year;
+  int month = 1 + sys_time.tm_mon;
+  return (year > 2020) || (year == 2020 && month >= 10);
 }
 
 void safety_setter_thread() {
@@ -106,6 +108,8 @@ void safety_setter_thread() {
   capnp::FlatArrayMessageReader cmsg(amsg);
   cereal::CarParams::Reader car_params = cmsg.getRoot<cereal::CarParams>();
   cereal::CarParams::SafetyModel safety_model = car_params.getSafetyModel();
+
+  panda->set_unsafe_mode(0);  // see safety_declarations.h for allowed values
 
   auto safety_param = car_params.getSafetyParam();
   LOGW("setting safety model: %d with param %d", (int)safety_model, safety_param);
@@ -470,6 +474,7 @@ void pigeon_thread() {
 
   // ubloxRaw = 8042
   PubMaster pm({"ubloxRaw"});
+  bool ignition_last = false;
 
 #ifdef QCOM2
   Pigeon * pigeon = Pigeon::connect("/dev/ttyHS0");
@@ -477,18 +482,26 @@ void pigeon_thread() {
   Pigeon * pigeon = Pigeon::connect(panda);
 #endif
 
-  pigeon->init();
-
   while (!do_exit && panda->connected) {
     std::string recv = pigeon->receive();
     if (recv.length() > 0) {
       if (recv[0] == (char)0x00){
-        LOGW("received invalid ublox message, resetting panda GPS");
-        pigeon->init();
+        if (ignition) {
+          LOGW("received invalid ublox message while onroad, resetting panda GPS");
+          pigeon->init();
+        }
       } else {
         pigeon_publish_raw(pm, recv);
       }
     }
+
+    // init pigeon on rising ignition edge
+    // since it was turned off in low power mode
+    if(ignition && !ignition_last) {
+      pigeon->init();
+    }
+
+    ignition_last = ignition;
 
     // 10ms - 100 Hz
     usleep(10*1000);

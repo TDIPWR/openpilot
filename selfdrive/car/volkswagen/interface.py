@@ -6,6 +6,7 @@ from selfdrive.car.interfaces import CarInterfaceBase
 GEAR = car.CarState.GearShifter
 EventName = car.CarEvent.EventName
 
+
 class CarInterface(CarInterfaceBase):
   def __init__(self, CP, CarController, CarState):
     super().__init__(CP, CarController, CarState)
@@ -18,8 +19,8 @@ class CarInterface(CarInterfaceBase):
     return float(accel) / 4.0
 
   @staticmethod
-  def get_params(candidate, fingerprint=gen_empty_fingerprint(), has_relay=False, car_fw=None):
-    ret = CarInterfaceBase.get_std_params(candidate, fingerprint, has_relay)
+  def get_params(candidate, fingerprint=gen_empty_fingerprint(), car_fw=None):
+    ret = CarInterfaceBase.get_std_params(candidate, fingerprint)
 
     # VW port is a community feature, since we don't own one to test
     ret.communityFeature = True

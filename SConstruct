@@ -1,10 +1,10 @@
-import Cython
-import distutils
 import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 import platform
+import numpy as np
 
 TICI = os.path.isfile('/TICI')
 Decider('MD5-timestamp')
@@ -16,10 +16,6 @@ AddOption('--test',
 AddOption('--asan',
           action='store_true',
           help='turn on ASAN')
-
-# Rebuild cython extensions if python, distutils, or cython change
-cython_dependencies = [Value(v) for v in (sys.version, distutils.__version__, Cython.__version__)]
-Export('cython_dependencies')
 
 real_arch = arch = subprocess.check_output(["uname", "-m"], encoding='utf8').rstrip()
 if platform.system() == "Darwin":
@@ -159,6 +155,7 @@ env = Environment(
     "#phonelibs/linux/include",
     "#phonelibs/snpe/include",
     "#phonelibs/nanovg",
+    "#selfdrive/boardd",
     "#selfdrive/common",
     "#selfdrive/camerad",
     "#selfdrive/camerad/include",
@@ -181,63 +178,27 @@ env = Environment(
   CXXFLAGS=["-std=c++1z"] + cxxflags,
   LIBPATH=libpath + [
     "#cereal",
-    "#selfdrive/common",
     "#phonelibs",
-  ]
+    "#opendbc/can",
+    "#selfdrive/boardd",
+    "#selfdrive/common",
+  ],
+  CYTHONCFILESUFFIX=".cpp",
+  COMPILATIONDB_USE_ABSPATH=True,
+  tools=["default", "cython", "compilation_db"],
 )
 
-qt_env = None
-if arch in ["x86_64", "Darwin", "larch64"]:
-  qt_env = env.Clone()
-
-  if arch == "Darwin":
-    qt_env['QTDIR'] = "/usr/local/opt/qt"
-    QT_BASE = "/usr/local/opt/qt/"
-    qt_dirs = [
-      QT_BASE + "include/",
-      QT_BASE + "include/QtWidgets",
-      QT_BASE + "include/QtGui",
-      QT_BASE + "include/QtCore",
-      QT_BASE + "include/QtDBus",
-      QT_BASE + "include/QtMultimedia",
-    ]
-    qt_env["LINKFLAGS"] += ["-F" + QT_BASE + "lib"]
-  else:
-    qt_env['QTDIR'] = "/usr"
-    qt_dirs = [
-      f"/usr/include/{real_arch}-linux-gnu/qt5",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtWidgets",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtGui",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtCore",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtDBus",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtMultimedia",
-      f"/usr/include/{real_arch}-linux-gnu/qt5/QtGui/5.5.1/QtGui",
-    ]
-
-  qt_env.Tool('qt')
-  qt_env['CPPPATH'] += qt_dirs
-  qt_flags = [
-    "-D_REENTRANT",
-    "-DQT_NO_DEBUG",
-    "-DQT_WIDGETS_LIB",
-    "-DQT_GUI_LIB",
-    "-DQT_CORE_LIB"
-  ]
-  qt_env['CXXFLAGS'] += qt_flags
+if GetOption('test'):
+  env.CompilationDatabase('compile_commands.json')
 
 if os.environ.get('SCONS_CACHE'):
   cache_dir = '/tmp/scons_cache'
+  if TICI:
+    cache_dir = '/data/scons_cache'
 
-  if os.getenv('CI'):
-    branch = os.getenv('GIT_BRANCH')
+  if QCOM_REPLAY:
+    cache_dir = '/tmp/scons_cache_qcom_replay'
 
-    if QCOM_REPLAY:
-      cache_dir = '/tmp/scons_cache_qcom_replay'
-    elif branch is not None and branch != 'master':
-      cache_dir_branch = '/tmp/scons_cache_' + branch
-      if not os.path.isdir(cache_dir_branch) and os.path.isdir(cache_dir):
-        shutil.copytree(cache_dir, cache_dir_branch)
-      cache_dir = cache_dir_branch
   CacheDir(cache_dir)
 
 node_interval = 5
@@ -261,9 +222,26 @@ def abspath(x):
     # rpath works elsewhere
     return x[0].path.rsplit("/", 1)[1][:-3]
 
+# Cython build enviroment
+py_include = sysconfig.get_paths()['include']
+envCython = env.Clone()
+envCython["CPPPATH"] += [py_include, np.get_include()]
+envCython["CCFLAGS"] += ["-Wno-#warnings", "-Wno-deprecated-declarations"]
+
+envCython["LIBS"] = []
+if arch == "Darwin":
+  envCython["LINKFLAGS"] = ["-bundle", "-undefined", "dynamic_lookup"]
+elif arch == "aarch64":
+  envCython["LINKFLAGS"] = ["-shared"]
+  envCython["LIBS"] = [os.path.basename(py_include)]
+else:
+  envCython["LINKFLAGS"] = ["-pthread", "-shared"]
+
+Export('envCython')
+
 # still needed for apks
 zmq = 'zmq'
-Export('env', 'qt_env', 'arch', 'zmq', 'SHARED', 'USE_WEBCAM', 'QCOM_REPLAY')
+Export('env', 'arch', 'real_arch', 'zmq', 'SHARED', 'USE_WEBCAM', 'QCOM_REPLAY')
 
 # cereal and messaging are shared with the system
 SConscript(['cereal/SConscript'])
@@ -316,6 +294,6 @@ SConscript(['selfdrive/ui/SConscript'])
 if arch != "Darwin":
   SConscript(['selfdrive/logcatd/SConscript'])
 
-
 if arch == "x86_64":
   SConscript(['tools/lib/index_log/SConscript'])
+
