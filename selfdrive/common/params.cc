@@ -25,7 +25,7 @@ std::string getenv_default(const char* env_var, const char * suffix, const char*
   const char* env_val = getenv(env_var);
   if (env_val != NULL){
     return std::string(env_val) + std::string(suffix);
-  } else {
+  } else{
     return std::string(default_val);
   }
 }
@@ -49,17 +49,30 @@ void params_sig_handler(int signal) {
 }
 
 static int fsync_dir(const char* path){
+  int result = 0;
   int fd = open(path, O_RDONLY, 0755);
+
   if (fd < 0){
-    return -1;
+    result = -1;
+    goto cleanup;
   }
 
-  int result = fsync(fd);
-  int result_close = close(fd);
-  if (result_close < 0) {
-    result = result_close;
+  result = fsync(fd);
+  if (result < 0) {
+    goto cleanup;
   }
-  return result;
+
+ cleanup:
+  int result_close = 0;
+  if (fd >= 0){
+    result_close = close(fd);
+  }
+
+  if (result_close < 0) {
+    return result_close;
+  } else {
+    return result;
+  }
 }
 
 static int mkdir_p(std::string path) {
@@ -224,6 +237,10 @@ cleanup:
 }
 
 int Params::delete_db_value(std::string key) {
+  return delete_db_value(key.c_str());
+}
+
+int Params::delete_db_value(const char* key) {
   int lock_fd = -1;
   int result;
   std::string path;
@@ -239,7 +256,7 @@ int Params::delete_db_value(std::string key) {
   }
 
   // Delete value.
-  path = params_path + "/d/" + key;
+  path = params_path + "/d/" + std::string(key);
   result = remove(path.c_str());
   if (result != 0) {
     result = ERR_NO_VALUE;

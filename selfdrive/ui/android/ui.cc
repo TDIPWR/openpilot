@@ -59,10 +59,6 @@ static void handle_display_state(UIState *s, bool user_input) {
     int display_mode = s->awake ? HWC_POWER_MODE_NORMAL : HWC_POWER_MODE_OFF;
     LOGW("setting display mode %d", display_mode);
     framebuffer_set_power(s->fb, display_mode);
-
-    if (s->awake) {
-      system("service call window 18 i32 1");
-    }
   }
 }
 
@@ -134,7 +130,7 @@ int main(int argc, char* argv[]) {
   float brightness_b = 0, brightness_m = 0;
   int result = read_param(&brightness_b, "BRIGHTNESS_B", true);
   result += read_param(&brightness_m, "BRIGHTNESS_M", true);
-  if (result != 0) {
+  if(result != 0) {
     brightness_b = LEON ? 10.0 : 5.0;
     brightness_m = LEON ? 2.6 : 1.3;
     write_param_float(brightness_b, "BRIGHTNESS_B", true);
