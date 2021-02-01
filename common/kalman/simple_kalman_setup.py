@@ -6,5 +6,4 @@ from common.cython_hacks import BuildExtWithoutPlatformSuffix
 
 setup(name='Simple Kalman Implementation',
       cmdclass={'build_ext': BuildExtWithoutPlatformSuffix},
-      ext_modules=cythonize(Extension("simple_kalman_impl",
-                                      ["simple_kalman_impl.pyx"])))
+      ext_modules=cythonize(Extension("simple_kalman_impl", ["simple_kalman_impl.pyx"])))

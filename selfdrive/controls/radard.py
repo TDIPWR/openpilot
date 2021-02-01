@@ -7,7 +7,7 @@ import cereal.messaging as messaging
 from cereal import car
 from common.numpy_fast import interp
 from common.params import Params
-from common.realtime import Ratekeeper, Priority, config_realtime_process
+from common.realtime import Ratekeeper, set_realtime_priority
 from selfdrive.config import RADAR_TO_CAMERA
 from selfdrive.controls.lib.cluster.fastcluster_py import cluster_points_centroid
 from selfdrive.controls.lib.radar_helpers import Cluster, Track
@@ -91,16 +91,19 @@ class RadarD():
     self.tracks = defaultdict(dict)
     self.kalman_params = KalmanParams(radar_ts)
 
+    self.active = 0
+
     # v_ego
     self.v_ego = 0.
     self.v_ego_hist = deque([0], maxlen=delay+1)
 
     self.ready = False
 
-  def update(self, sm, rr, enable_lead):
-    self.current_time = 1e-9*max(sm.logMonoTime.values())
+  def update(self, frame, sm, rr, has_radar):
+    self.current_time = 1e-9*max([sm.logMonoTime[key] for key in sm.logMonoTime.keys()])
 
     if sm.updated['controlsState']:
+      self.active = sm['controlsState'].active
       self.v_ego = sm['controlsState'].vEgo
       self.v_ego_hist.append(self.v_ego)
     if sm.updated['model']:
@@ -130,6 +133,7 @@ class RadarD():
     idens = list(sorted(self.tracks.keys()))
     track_pts = list([self.tracks[iden].get_key_for_cluster() for iden in idens])
 
+
     # If we have multiple points, cluster them
     if len(track_pts) > 1:
       cluster_idxs = cluster_points_centroid(track_pts, 2.5)
@@ -157,22 +161,21 @@ class RadarD():
 
     # *** publish radarState ***
     dat = messaging.new_message('radarState')
-    dat.valid = sm.all_alive_and_valid()
-    radarState = dat.radarState
-    radarState.mdMonoTime = sm.logMonoTime['model']
-    radarState.canMonoTimes = list(rr.canMonoTimes)
-    radarState.radarErrors = list(rr.errors)
-    radarState.controlsStateMonoTime = sm.logMonoTime['controlsState']
+    dat.valid = sm.all_alive_and_valid(service_list=['controlsState', 'model'])
+    dat.radarState.mdMonoTime = sm.logMonoTime['model']
+    dat.radarState.canMonoTimes = list(rr.canMonoTimes)
+    dat.radarState.radarErrors = list(rr.errors)
+    dat.radarState.controlsStateMonoTime = sm.logMonoTime['controlsState']
 
-    if enable_lead:
-      radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, sm['model'].lead, low_speed_override=True)
-      radarState.leadTwo = get_lead(self.v_ego, self.ready, clusters, sm['model'].leadFuture, low_speed_override=False)
+    if has_radar:
+      dat.radarState.leadOne = get_lead(self.v_ego, self.ready, clusters, sm['model'].lead, low_speed_override=True)
+      dat.radarState.leadTwo = get_lead(self.v_ego, self.ready, clusters, sm['model'].leadFuture, low_speed_override=False)
     return dat
 
 
 # fuses camera and radar data for best lead detection
 def radard_thread(sm=None, pm=None, can_sock=None):
-  config_realtime_process(2, Priority.CTRL_LOW)
+  set_realtime_priority(2)
 
   # wait for stats about the car to come in from controls
   cloudlog.info("radard is waiting for CarParams")
@@ -183,11 +186,13 @@ def radard_thread(sm=None, pm=None, can_sock=None):
   cloudlog.info("radard is importing %s", CP.carName)
   RadarInterface = importlib.import_module('selfdrive.car.%s.radar_interface' % CP.carName).RadarInterface
 
-  # *** setup messaging
   if can_sock is None:
     can_sock = messaging.sub_sock('can')
+
   if sm is None:
-    sm = messaging.SubMaster(['model', 'controlsState'])
+    sm = messaging.SubMaster(['model', 'controlsState', 'liveParameters'])
+
+  # *** publish radarState and liveTracks
   if pm is None:
     pm = messaging.PubMaster(['radarState', 'liveTracks'])
 
@@ -196,8 +201,7 @@ def radard_thread(sm=None, pm=None, can_sock=None):
   rk = Ratekeeper(1.0 / CP.radarTimeStep, print_delay_threshold=None)
   RD = RadarD(CP.radarTimeStep, RI.delay)
 
-  # TODO: always log leads once we can hide them conditionally
-  enable_lead = CP.openpilotLongitudinalControl or not CP.radarOffCan
+  has_radar = not CP.radarOffCan
 
   while 1:
     can_strings = messaging.drain_sock_raw(can_sock, wait_for_one=True)
@@ -208,7 +212,7 @@ def radard_thread(sm=None, pm=None, can_sock=None):
 
     sm.update(0)
 
-    dat = RD.update(sm, rr, enable_lead)
+    dat = RD.update(rk.frame, sm, rr, has_radar)
     dat.radarState.cumLagMs = -rk.remaining*1000.
 
     pm.send('radarState', dat)

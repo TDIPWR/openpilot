@@ -21,8 +21,6 @@
 
 #include <stdio.h>
 
-#include "services.h"
-
 #include "msgq.hpp"
 
 void sigusr2_handler(int signal) {
@@ -33,13 +31,7 @@ uint64_t msgq_get_uid(void){
   std::random_device rd("/dev/urandom");
   std::uniform_int_distribution<uint64_t> distribution(0,std::numeric_limits<uint32_t>::max());
 
-  #ifdef __APPLE__
-    // TODO: this doesn't work
-    uint64_t uid = distribution(rd) << 32 | getpid();
-  #else
-    uint64_t uid = distribution(rd) << 32 | syscall(SYS_gettid);
-  #endif
-
+  uint64_t uid = distribution(rd) << 32 | syscall(SYS_gettid);
   return uid;
 }
 
@@ -83,20 +75,11 @@ void msgq_wait_for_subscriber(msgq_queue_t *q){
   return;
 }
 
-bool service_exists(std::string path){
-  for (const auto& it : services) {
-    if (it.name == path) {
-      return true;
-    }
-  }
-  return false;
-}
+
 
 int msgq_new_queue(msgq_queue_t * q, const char * path, size_t size){
   assert(size < 0xFFFFFFFF); // Buffer must be smaller than 2^32 bytes
-  if (!service_exists(std::string(path))){
-    std::cout << "Warning, " << std::string(path) << " is not in service list." << std::endl;
-  }
+
   std::signal(SIGUSR2, sigusr2_handler);
 
   const char * prefix = "/dev/shm/";
@@ -105,24 +88,23 @@ int msgq_new_queue(msgq_queue_t * q, const char * path, size_t size){
   strcat(full_path, path);
 
   auto fd = open(full_path, O_RDWR | O_CREAT, 0777);
-  if (fd < 0) {
-    std::cout << "Warning, could not open: " << full_path << std::endl;
-    delete[] full_path;
-    return -1;
-  }
   delete[] full_path;
 
-  int rc = ftruncate(fd, size + sizeof(msgq_header_t));
-  if (rc < 0){
-    close(fd);
+  if (fd < 0) {
+    std::cout << "Warning, could not open: " << full_path << std::endl;
     return -1;
   }
+
+  int rc = ftruncate(fd, size + sizeof(msgq_header_t));
+  if (rc < 0)
+    return -1;
+
   char * mem = (char*)mmap(NULL, size + sizeof(msgq_header_t), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
   close(fd);
 
-  if (mem == NULL){
+  if (mem == NULL)
     return -1;
-  }
+
   q->mmap_p = mem;
 
   msgq_header_t *header = (msgq_header_t *)mem;
@@ -430,6 +412,8 @@ int msgq_msg_recv(msgq_msg_t * msg, msgq_queue_t * q){
 
 
 int msgq_poll(msgq_pollitem_t * items, size_t nitems, int timeout){
+  assert(timeout >= 0);
+
   int num = 0;
 
   // Check if messages ready

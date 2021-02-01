@@ -1,5 +1,3 @@
-# flake8: noqa
-
 from selfdrive.car import dbc_dict
 
 class CarControllerParams:
@@ -46,7 +44,7 @@ MQB_LDW_MESSAGES = {
 }
 
 class CAR:
-  GOLF = "VOLKSWAGEN GOLF"
+  GOLF = "Volkswagen Golf"
 
 FINGERPRINTS = {
   CAR.GOLF: [

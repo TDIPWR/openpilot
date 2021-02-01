@@ -1,5 +1,4 @@
 import copy
-from collections import deque
 from cereal import car
 from opendbc.can.can_define import CANDefine
 from selfdrive.car.interfaces import CarStateBase
@@ -7,14 +6,12 @@ from selfdrive.config import Conversions as CV
 from opendbc.can.parser import CANParser
 from selfdrive.car.nissan.values import CAR, DBC, STEER_THRESHOLD
 
-TORQUE_SAMPLES = 12
 
 class CarState(CarStateBase):
   def __init__(self, CP):
     super().__init__(CP)
     can_define = CANDefine(DBC[CP.carFingerprint]['pt'])
 
-    self.steeringTorqueSamples = deque(TORQUE_SAMPLES*[0], TORQUE_SAMPLES)
     self.shifter_values = can_define.dv["GEARBOX"]["GEAR_SHIFTER"]
 
   def update(self, cp, cp_adas, cp_cam):
@@ -47,25 +44,25 @@ class CarState(CarStateBase):
 
     ret.cruiseState.enabled = bool(cp_adas.vl["CRUISE_STATE"]["CRUISE_ENABLED"])
     if self.CP.carFingerprint in [CAR.ROGUE, CAR.XTRAIL]:
-      ret.seatbeltUnlatched = cp.vl["HUD"]["SEATBELT_DRIVER_LATCHED"] == 0
       ret.cruiseState.available = bool(cp_cam.vl["PRO_PILOT"]["CRUISE_ON"])
     elif self.CP.carFingerprint == CAR.LEAF:
-      ret.seatbeltUnlatched = cp.vl["SEATBELT"]["SEATBELT_DRIVER_LATCHED"] == 0
       ret.cruiseState.available = bool(cp.vl["CRUISE_THROTTLE"]["CRUISE_AVAILABLE"])
 
+    # TODO: Find mph/kph bit on XTRAIL until then, assume xtrail is kph.
+    # Unable to change kph to mph on the xtrail, need a rogue to test it on
     speed = cp_adas.vl["PROPILOT_HUD"]["SET_SPEED"]
     if speed != 255:
-      if self.CP.carFingerprint == CAR.LEAF:
-        conversion = CV.MPH_TO_MS if cp.vl["HUD_SETTINGS"]["SPEED_MPH"] else CV.KPH_TO_MS
+      if self.CP.carFingerprint == CAR.XTRAIL:
+        conversion = CV.KPH_TO_MS
+      elif self.CP.carFingerprint == CAR.ROGUE:
+        conversion = CV.MPH_TO_MS
       else:
-        conversion = CV.MPH_TO_MS if cp.vl["HUD"]["SPEED_MPH"] else CV.KPH_TO_MS
+        conversion = CV.MPH_TO_MS if cp.vl["HUD_SETTINGS"]["SPEED_MPH"] else CV.KPH_TO_MS
       speed -= 1  # Speed on HUD is always 1 lower than actually sent on can bus
       ret.cruiseState.speed = speed * conversion
 
     ret.steeringTorque = cp.vl["STEER_TORQUE_SENSOR"]["STEER_TORQUE_DRIVER"]
-    self.steeringTorqueSamples.append(ret.steeringTorque)
-    # Filtering driver torque to prevent steeringPressed false positives
-    ret.steeringPressed = bool(abs(sum(self.steeringTorqueSamples) / TORQUE_SAMPLES) > STEER_THRESHOLD)
+    ret.steeringPressed = abs(ret.steeringTorque) > STEER_THRESHOLD
 
     ret.steeringAngle = cp.vl["STEER_ANGLE_SENSOR"]["STEER_ANGLE"]
 
@@ -76,6 +73,8 @@ class CarState(CarStateBase):
                         cp.vl["DOORS_LIGHTS"]["DOOR_OPEN_RL"],
                         cp.vl["DOORS_LIGHTS"]["DOOR_OPEN_FR"],
                         cp.vl["DOORS_LIGHTS"]["DOOR_OPEN_FL"]])
+
+    ret.seatbeltUnlatched = cp.vl["SEATBELT"]["SEATBELT_DRIVER_LATCHED"] == 0
 
     ret.espDisabled = bool(cp.vl["ESP"]["ESP_DISABLED"])
 
@@ -116,6 +115,8 @@ class CarState(CarStateBase):
       ("RIGHT_BLINKER", "LIGHTS", 0),
       ("LEFT_BLINKER", "LIGHTS", 0),
 
+      ("SEATBELT_DRIVER_LATCHED", "SEATBELT", 0),
+
       ("ESP_DISABLED", "ESP", 0),
 
       ("GEAR_SHIFTER", "GEARBOX", 0),
@@ -136,8 +137,6 @@ class CarState(CarStateBase):
         ("BRAKE_LIGHT", "DOORS_LIGHTS", 1),
 
         ("GAS_PEDAL", "GAS_PEDAL", 0),
-        ("SEATBELT_DRIVER_LATCHED", "HUD", 0),
-        ("SPEED_MPH", "HUD", 0),
 
         ("PROPILOT_BUTTON", "CRUISE_THROTTLE", 0),
         ("CANCEL_BUTTON", "CRUISE_THROTTLE", 0),
@@ -166,7 +165,6 @@ class CarState(CarStateBase):
         ("GAS_PEDAL", "CRUISE_THROTTLE", 0),
         ("CRUISE_AVAILABLE", "CRUISE_THROTTLE", 0),
         ("SPEED_MPH", "HUD_SETTINGS", 0),
-        ("SEATBELT_DRIVER_LATCHED", "SEATBELT", 0),
 
         # Copy other values, we use this to cancel
         ("CANCEL_SEATBELT", "CANCEL_MSG", 0),

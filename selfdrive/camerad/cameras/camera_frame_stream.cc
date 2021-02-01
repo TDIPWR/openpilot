@@ -23,35 +23,44 @@ extern volatile sig_atomic_t do_exit;
 #define FRAME_HEIGHT 874
 
 namespace {
-void camera_open(CameraState *s, bool rear) {
+void camera_open(CameraState *s, VisionBuf *camera_bufs, bool rear) {
+  assert(camera_bufs);
+  s->camera_bufs = camera_bufs;
 }
 
 void camera_close(CameraState *s) {
-  s->buf.stop();
+  tbuffer_stop(&s->camera_tb);
 }
 
-void camera_init(CameraState *s, int camera_id, unsigned int fps, cl_device_id device_id, cl_context ctx) {
+void camera_release_buffer(void *cookie, int buf_idx) {
+  CameraState *s = static_cast<CameraState *>(cookie);
+}
+
+void camera_init(CameraState *s, int camera_id, unsigned int fps) {
   assert(camera_id < ARRAYSIZE(cameras_supported));
   s->ci = cameras_supported[camera_id];
   assert(s->ci.frame_width != 0);
 
+  s->frame_size = s->ci.frame_height * s->ci.frame_stride;
   s->fps = fps;
-  s->buf.init(device_id, ctx, s, FRAME_BUF_COUNT, "camera");
+
+  tbuffer_init2(&s->camera_tb, FRAME_BUF_COUNT, "frame", camera_release_buffer, s);
 }
 
-void run_frame_stream(MultiCameraState *s) {
-  s->sm = new SubMaster({"frame"});
+void run_frame_stream(DualCameraState *s) {
+  int err;
+  SubMaster sm({"frame"});
 
   CameraState *const rear_camera = &s->rear;
-  auto *tb = &rear_camera->buf.camera_tb;
+  auto *tb = &rear_camera->camera_tb;
 
   while (!do_exit) {
-    if (s->sm->update(1000) == 0) continue;
+    if (sm.update(1000) == 0) continue;
 
-    auto frame = (*(s->sm))["frame"].getFrame();
+    auto frame = sm["frame"].getFrame();
 
     const int buf_idx = tbuffer_select(tb);
-    rear_camera->buf.camera_bufs_metadata[buf_idx] = {
+    rear_camera->camera_bufs_metadata[buf_idx] = {
       .frame_id = frame.getFrameId(),
       .timestamp_eof = frame.getTimestampEof(),
       .frame_length = static_cast<unsigned>(frame.getFrameLength()),
@@ -59,10 +68,20 @@ void run_frame_stream(MultiCameraState *s) {
       .global_gain = static_cast<unsigned>(frame.getGlobalGain()),
     };
 
-    cl_command_queue q = rear_camera->buf.camera_bufs[buf_idx].copy_q;
-    cl_mem yuv_cl = rear_camera->buf.camera_bufs[buf_idx].buf_cl;
+    cl_command_queue q = rear_camera->camera_bufs[buf_idx].copy_q;
+    cl_mem yuv_cl = rear_camera->camera_bufs[buf_idx].buf_cl;
+    cl_event map_event;
+    void *yuv_buf = (void *)clEnqueueMapBuffer(q, yuv_cl, CL_TRUE,
+                                                CL_MAP_WRITE, 0, frame.getImage().size(),
+                                                0, NULL, &map_event, &err);
+    assert(err == 0);
+    clWaitForEvents(1, &map_event);
+    clReleaseEvent(map_event);
+    memcpy(yuv_buf, frame.getImage().begin(), frame.getImage().size());
 
-    clEnqueueWriteBuffer(q, yuv_cl, CL_TRUE, 0, frame.getImage().size(), frame.getImage().begin(), 0, NULL, NULL);
+    clEnqueueUnmapMemObject(q, yuv_cl, yuv_buf, 0, NULL, &map_event);
+    clWaitForEvents(1, &map_event);
+    clReleaseEvent(map_event);
     tbuffer_dispatch(tb, buf_idx);
   }
 }
@@ -71,11 +90,11 @@ void run_frame_stream(MultiCameraState *s) {
 
 CameraInfo cameras_supported[CAMERA_ID_MAX] = {
   [CAMERA_ID_IMX298] = {
-    .frame_width = FRAME_WIDTH,
-    .frame_height = FRAME_HEIGHT,
-    .frame_stride = FRAME_WIDTH*3,
-    .bayer = false,
-    .bayer_flip = false,
+      .frame_width = FRAME_WIDTH,
+      .frame_height = FRAME_HEIGHT,
+      .frame_stride = FRAME_WIDTH*3,
+      .bayer = false,
+      .bayer_flip = false,
   },
   [CAMERA_ID_OV8865] = {
     .frame_width = 1632,
@@ -87,15 +106,17 @@ CameraInfo cameras_supported[CAMERA_ID_MAX] = {
   },
 };
 
-void cameras_init(MultiCameraState *s, cl_device_id device_id, cl_context ctx) {
-  camera_init(&s->rear, CAMERA_ID_IMX298, 20, device_id, ctx);
+void cameras_init(DualCameraState *s) {
+  memset(s, 0, sizeof(*s));
+
+  camera_init(&s->rear, CAMERA_ID_IMX298, 20);
   s->rear.transform = (mat3){{
     1.0,  0.0, 0.0,
     0.0, 1.0, 0.0,
     0.0,  0.0, 1.0,
   }};
 
-  camera_init(&s->front, CAMERA_ID_OV8865, 10, device_id, ctx);
+  camera_init(&s->front, CAMERA_ID_OV8865, 10);
   s->front.transform = (mat3){{
     1.0,  0.0, 0.0,
     0.0, 1.0, 0.0,
@@ -105,27 +126,26 @@ void cameras_init(MultiCameraState *s, cl_device_id device_id, cl_context ctx) {
 
 void camera_autoexposure(CameraState *s, float grey_frac) {}
 
-void cameras_open(MultiCameraState *s) {
+void cameras_open(DualCameraState *s, VisionBuf *camera_bufs_rear,
+                  VisionBuf *camera_bufs_focus, VisionBuf *camera_bufs_stats,
+                  VisionBuf *camera_bufs_front) {
+  assert(camera_bufs_rear);
+  assert(camera_bufs_front);
+  int err;
+
   // LOG("*** open front ***");
-  camera_open(&s->front, false);
+  camera_open(&s->front, camera_bufs_front, false);
 
   // LOG("*** open rear ***");
-  camera_open(&s->rear, true);
+  camera_open(&s->rear, camera_bufs_rear, true);
 }
 
-void cameras_close(MultiCameraState *s) {
+void cameras_close(DualCameraState *s) {
   camera_close(&s->rear);
 }
 
-// called by processing_thread
-void camera_process_rear(MultiCameraState *s, CameraState *c, int cnt) {
-  // empty
-}
-
-void cameras_run(MultiCameraState *s) {
-  std::thread t = start_process_thread(s, "processing", &s->rear, 51, camera_process_rear);
+void cameras_run(DualCameraState *s) {
   set_thread_name("frame_streaming");
   run_frame_stream(s);
   cameras_close(s);
-  t.join();
 }

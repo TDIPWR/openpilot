@@ -171,6 +171,7 @@ CANParser::CANParser(int abus, const std::string& dbc_name,
 
 void CANParser::UpdateCans(uint64_t sec, const capnp::List<cereal::CanData>::Reader& cans) {
     int msg_count = cans.size();
+    uint64_t p;
 
     DEBUG("got %d messages\n", msg_count);
 
@@ -187,7 +188,7 @@ void CANParser::UpdateCans(uint64_t sec, const capnp::List<cereal::CanData>::Rea
         continue;
       }
 
-      if (cmsg.getDat().size() > 8) continue; //shouldn't ever happen
+      if (cmsg.getDat().size() > 8) continue; //shouldnt ever happen
       uint8_t dat[8] = {0};
       memcpy(dat, cmsg.getDat().begin(), cmsg.getDat().size());
 

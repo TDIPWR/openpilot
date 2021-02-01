@@ -6,6 +6,7 @@
 #include "snpemodel.h"
 
 void PrintErrorStringAndExit() {
+  const char* const errStr = zdl::DlSystem::getLastErrorString();
   std::cerr << zdl::DlSystem::getLastErrorString() << std::endl;
   std::exit(EXIT_FAILURE);
 }
@@ -13,7 +14,7 @@ void PrintErrorStringAndExit() {
 SNPEModel::SNPEModel(const char *path, float *loutput, size_t loutput_size, int runtime) {
   output = loutput;
   output_size = loutput_size;
-#if defined(QCOM) || defined(QCOM2)
+#ifdef QCOM
   if (runtime==USE_GPU_RUNTIME) {
     Runtime = zdl::DlSystem::Runtime_t::GPU;
   } else if (runtime==USE_DSP_RUNTIME) {
@@ -35,7 +36,7 @@ SNPEModel::SNPEModel(const char *path, float *loutput, size_t loutput_size, int 
   // create model runner
   zdl::SNPE::SNPEBuilder snpeBuilder(container.get());
   while (!snpe) {
-#if defined(QCOM) || defined(QCOM2)
+#ifdef QCOM
     snpe = snpeBuilder.setOutputLayers({})
                       .setRuntimeProcessor(Runtime)
                       .setUseUserSuppliedBuffers(true)

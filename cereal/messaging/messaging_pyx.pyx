@@ -140,9 +140,9 @@ cdef class PubSocket:
       else:
         raise MessagingError
 
-  def send(self, bytes data):
+  def send(self, string data):
     length = len(data)
-    r = self.socket.send(<char*>data, length)
+    r = self.socket.send(<char*>data.c_str(), length)
 
     if r != length:
       if errno.errno == errno.EADDRINUSE:

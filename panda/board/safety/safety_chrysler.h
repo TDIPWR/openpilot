@@ -66,6 +66,8 @@ static int chrysler_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
                                  chrysler_get_checksum, chrysler_compute_checksum,
                                  chrysler_get_counter);
 
+  bool unsafe_allow_gas = unsafe_mode & UNSAFE_DISABLE_DISENGAGE_ON_GAS;
+
   if (valid && (GET_BUS(to_push) == 0)) {
     int addr = GET_ADDR(to_push);
 
@@ -99,19 +101,26 @@ static int chrysler_rx_hook(CAN_FIFOMailBox_TypeDef *to_push) {
 
     // exit controls on rising edge of gas press
     if (addr == 308) {
-      gas_pressed = ((GET_BYTE(to_push, 5) & 0x7F) != 0) && ((int)vehicle_speed > CHRYSLER_GAS_THRSLD);
+      bool gas_pressed = (GET_BYTE(to_push, 5) & 0x7F) != 0;
+      if (!unsafe_allow_gas && gas_pressed && !gas_pressed_prev && ((int)vehicle_speed > CHRYSLER_GAS_THRSLD)) {
+        controls_allowed = 0;
+      }
+      gas_pressed_prev = gas_pressed;
     }
 
     // exit controls on rising edge of brake press
     if (addr == 320) {
-      brake_pressed = (GET_BYTE(to_push, 0) & 0x7) == 5;
+      bool brake_pressed = (GET_BYTE(to_push, 0) & 0x7) == 5;
       if (brake_pressed && (!brake_pressed_prev || vehicle_moving)) {
         controls_allowed = 0;
       }
       brake_pressed_prev = brake_pressed;
     }
 
-    generic_rx_checks((addr == 0x292));
+    // check if stock camera ECU is on bus 0
+    if ((safety_mode_cnt > RELAY_TRNS_TIMEOUT) && (addr == 0x292)) {
+      relay_malfunction_set();
+    }
   }
   return valid;
 }

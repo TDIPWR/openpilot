@@ -62,7 +62,7 @@ class PathPlanner():
     self.frame = 0
     if os.path.exists('/data/curvature.json'):
         with open("/data/curvature.json", "r") as f:
-            self.curvature_offset_i = json.load(f)
+            self.curvature_offset_i = json.load(f)	
     else:
         self.curvature_offset_i = 0.0
     self.lane_change_enabled = Params().get('LaneChangeEnabled') == b'1'
@@ -97,13 +97,8 @@ class PathPlanner():
 
     # Run MPC
     self.angle_steers_des_prev = self.angle_steers_des_mpc
-
-    # Update vehicle model
-    x = max(sm['liveParameters'].stiffnessFactor, 0.1)
-    sr = max(sm['liveParameters'].steerRatio, 0.1)
-    VM.update_params(x, sr)
-
-    curvature_factor = VM.curvature_factor(v_ego)
+    VM.update_params(sm['liveParameters'].stiffnessFactor, sm['liveParameters'].steerRatio)
+    curvature_factor = VM.curvature_factor(v_ego) + self.curvature_offset_i
 
     self.LP.parse_model(sm['model'])
 
@@ -116,16 +111,13 @@ class PathPlanner():
     elif sm['carState'].rightBlinker:
       self.lane_change_direction = LaneChangeDirection.right
 
-    if (not active) or (self.lane_change_timer > LANE_CHANGE_TIME_MAX) or (not self.lane_change_enabled):
+    if (not active) or (self.lane_change_timer > LANE_CHANGE_TIME_MAX) or (not one_blinker) or (not self.lane_change_enabled):
       self.lane_change_state = LaneChangeState.off
       self.lane_change_direction = LaneChangeDirection.none
     else:
       torque_applied = sm['carState'].steeringPressed and \
-                       ((sm['carState'].steeringTorque > 0 and self.lane_change_direction == LaneChangeDirection.left) or
+                       ((sm['carState'].steeringTorque > 0 and self.lane_change_direction == LaneChangeDirection.left) or \
                         (sm['carState'].steeringTorque < 0 and self.lane_change_direction == LaneChangeDirection.right))
-
-      blindspot_detected = ((sm['carState'].leftBlindspot and self.lane_change_direction == LaneChangeDirection.left) or
-                            (sm['carState'].rightBlindspot and self.lane_change_direction == LaneChangeDirection.right))
 
       lane_change_prob = self.LP.l_lane_change_prob + self.LP.r_lane_change_prob
 
@@ -139,7 +131,7 @@ class PathPlanner():
       elif self.lane_change_state == LaneChangeState.preLaneChange:
         if not one_blinker or below_lane_change_speed:
           self.lane_change_state = LaneChangeState.off
-        elif torque_applied and not blindspot_detected:
+        elif torque_applied:
           self.lane_change_state = LaneChangeState.laneChangeStarting
 
       # starting

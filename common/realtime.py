@@ -1,10 +1,11 @@
 """Utilities for reading real time clocks and keeping soft real time constraints."""
-import gc
 import os
 import time
+import platform
+import subprocess
 import multiprocessing
+from cffi import FFI
 
-from common.hardware import PC
 from common.common_pyx import sec_since_boot  # pylint: disable=no-name-in-module, import-error
 
 
@@ -15,26 +16,24 @@ DT_DMON = 0.1  # driver monitoring
 DT_TRML = 0.5  # thermald and manager
 
 
-class Priority:
-  MIN_REALTIME = 52 # highest android process priority is 51
-  CTRL_LOW = MIN_REALTIME
-  CTRL_HIGH = MIN_REALTIME + 1
+ffi = FFI()
+ffi.cdef("long syscall(long number, ...);")
+libc = ffi.dlopen(None)
 
 
 def set_realtime_priority(level):
-  if not PC:
-    os.sched_setscheduler(0, os.SCHED_FIFO, os.sched_param(level))
+  if os.getuid() != 0:
+    print("not setting priority, not root")
+    return
+  if platform.machine() == "x86_64":
+    NR_gettid = 186
+  elif platform.machine() == "aarch64":
+    NR_gettid = 178
+  else:
+    raise NotImplementedError
 
-
-def set_core_affinity(core):
-  if not PC:
-    os.sched_setaffinity(0, [core,])
-
-
-def config_realtime_process(core, priority):
-  gc.disable()
-  set_realtime_priority(priority)
-  set_core_affinity(core)
+  tid = libc.syscall(NR_gettid)
+  return subprocess.call(['chrt', '-f', '-p', str(level), str(tid)])
 
 
 class Ratekeeper():

@@ -1,6 +1,6 @@
 //==============================================================================
 //
-//  Copyright (c) 2014-2020 Qualcomm Technologies, Inc.
+//  Copyright (c) 2014-2019 Qualcomm Technologies, Inc.
 //  All Rights Reserved.
 //  Confidential and Proprietary - Qualcomm Technologies, Inc.
 //
@@ -128,13 +128,9 @@ enum class ProfilingLevel_t
     BASIC = 1,
 
     /// Detailed profiling
-    /// Collects more runtime stats in the DiagLog, including per-layer statistics
+    /// Collects more runtime stats in the DiagLog
     /// Performance may be impacted
-    DETAILED = 2,
-
-    /// Moderate profiling
-    /// Collects more runtime stats in the DiagLog, no per-layer statistics
-    MODERATE = 3
+    DETAILED = 2
 };
 
 /**

@@ -5,7 +5,8 @@ from opendbc.can.can_define import CANDefine
 from opendbc.can.parser import CANParser
 from selfdrive.car.interfaces import CarStateBase
 from selfdrive.car.gm.values import DBC, CAR, AccState, CanBus, \
-                                    CruiseButtons, STEER_THRESHOLD
+                                    CruiseButtons, is_eps_status_ok, \
+                                    STEER_THRESHOLD
 
 
 class CarState(CarStateBase):
@@ -57,17 +58,18 @@ class CarState(CarStateBase):
     ret.espDisabled = pt_cp.vl["ESPStatus"]['TractionControlOn'] != 1
     self.pcm_acc_status = pt_cp.vl["AcceleratorPedal2"]['CruiseState']
 
-    ret.brakePressed = ret.brake > 1e-5
-    # Regen braking is braking
+    regen_pressed = False
     if self.car_fingerprint == CAR.VOLT:
-      ret.brakePressed = ret.brakePressed or bool(pt_cp.vl["EBCMRegenPaddle"]['RegenPaddle'])
+      regen_pressed = bool(pt_cp.vl["EBCMRegenPaddle"]['RegenPaddle'])
 
+    # Regen braking is braking
+    ret.brakePressed = ret.brake > 1e-5 or regen_pressed
     ret.cruiseState.enabled = self.pcm_acc_status != AccState.OFF
     ret.cruiseState.standstill = self.pcm_acc_status == AccState.STANDSTILL
 
     # 0 - inactive, 1 - active, 2 - temporary limited, 3 - failed
     self.lkas_status = pt_cp.vl["PSCMStatus"]['LKATorqueDeliveredStatus']
-    ret.steerWarning = self.lkas_status not in [0, 1]
+    ret.steerWarning = not is_eps_status_ok(self.lkas_status, self.car_fingerprint)
 
     return ret
 

@@ -5,14 +5,11 @@
 #include <vector>
 #include <CL/cl.h>
 
-using namespace std;
-
 class Thneed;
 
 class GPUMalloc {
   public:
     GPUMalloc(int size, int fd);
-    ~GPUMalloc();
     void *alloc(int size);
   private:
     uint64_t base;
@@ -37,7 +34,7 @@ class Thneed {
     void stop();
     void execute(float **finputs, float *foutput, bool slow=false);
 
-    vector<cl_mem> inputs;
+    std::vector<cl_mem> inputs;
     cl_mem output;
 
     cl_command_queue command_queue;
@@ -46,9 +43,9 @@ class Thneed {
     // protected?
     int record;
     int timestamp;
-    unique_ptr<GPUMalloc> ram;
-    vector<unique_ptr<CachedCommand> > cmds;
-    vector<string> syncobjs;
+    GPUMalloc *ram;
+    std::vector<CachedCommand *> cmds;
+    std::vector<std::pair<int, struct kgsl_gpuobj_sync_obj *> > syncobjs;
     int fd;
 };
 

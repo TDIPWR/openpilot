@@ -35,10 +35,14 @@ void set_do_exit(int sig) {
 
 void nmea_callback(GpsUtcTime timestamp, const char* nmea, int length) {
 
+  uint64_t log_time = nanos_since_boot();
   uint64_t log_time_wall = nanos_since_epoch();
 
-  MessageBuilder msg;
-  auto nmeaData = msg.initEvent().initGpsNMEA();
+  capnp::MallocMessageBuilder msg;
+  cereal::Event::Builder event = msg.initRoot<cereal::Event>();
+  event.setLogMonoTime(log_time);
+
+  auto nmeaData = event.initGpsNMEA();
   nmeaData.setTimestamp(timestamp);
   nmeaData.setLocalWallTime(log_time_wall);
   nmeaData.setNmea(nmea);
@@ -48,9 +52,13 @@ void nmea_callback(GpsUtcTime timestamp, const char* nmea, int length) {
 
 void location_callback(GpsLocation* location) {
   //printf("got location callback\n");
+  uint64_t log_time = nanos_since_boot();
 
-  MessageBuilder msg;
-  auto locationData = msg.initEvent().initGpsLocation();
+  capnp::MallocMessageBuilder msg;
+  cereal::Event::Builder event = msg.initRoot<cereal::Event>();
+  event.setLogMonoTime(log_time);
+
+  auto locationData = event.initGpsLocation();
   locationData.setFlags(location->flags);
   locationData.setLatitude(location->latitude);
   locationData.setLongitude(location->longitude);
@@ -147,6 +155,7 @@ void gps_destroy() {
 }
 
 int main() {
+  int err = 0;
   setpriority(PRIO_PROCESS, 0, -13);
 
   signal(SIGINT, (sighandler_t)set_do_exit);

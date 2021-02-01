@@ -1,7 +1,7 @@
 // **** libc ****
 
-void delay(uint32_t a) {
-  volatile uint32_t i;
+void delay(int a) {
+  volatile int i;
   for (i = 0; i < a; i++);
 }
 
